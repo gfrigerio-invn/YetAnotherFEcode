@@ -142,7 +142,7 @@ cfg.t_shock     = 10e-7;      % half-sine duration [s]
 
 % --- Integration ---
 cfg.dt        = 2e-9;
-cfg.tmax      = 1e-4;
+cfg.tmax      = 30e-6;
 cfg.RelTol    = 1e-8;         % ROM
 cfg.RelTolFOM = 1e-8;         % FOM
 cfg.output_stride = 10;       % output every N steps of dt
