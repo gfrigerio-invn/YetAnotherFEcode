@@ -7,11 +7,11 @@ close all;
 
 % Inserire le due frequenze di riferimento in Hz
 f_ref = [7082.177;     % f1 [Hz]
-         2e6];         % f2 [Hz]
+         50e6];         % f2 [Hz]
 
 % Inserire i due Q factor corrispondenti
 Q_ref = [5;             % Q alla frequenza f1
-         500];          % Q alla frequenza f2
+         200];          % Q alla frequenza f2
 
 % Damping ratio aggiuntivo costante.
 % Porre dmprat = 0 per utilizzare solamente lo smorzamento di Rayleigh.

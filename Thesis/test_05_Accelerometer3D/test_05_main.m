@@ -84,15 +84,16 @@ cfg.bc_sets = {'anchor'};
 % the two planes diverge. An oblique normal also needs dofs = 'all', because
 % the contact force then has components on all three DOFs of the node.
 
-gap_stop = 2.0;            % [um]
+gap_top = 4.0;            % [um]
+gap_bot = 2.0;            % [um]
 
 k = 0;
 for it = 1:size(tab, 1)
-    for face = {'top', [0 0 1]; 'bot', [0 0 -1]}'
+    for face = {'top', [0 0 1], gap_top; 'bot', [0 0 -1], gap_bot}'
         k = k + 1;
         cfg.interfaces(k).set    = ['stop_' tab{it,1} '_' face{1}];
         cfg.interfaces(k).normal = face{2};
-        cfg.interfaces(k).gap    = gap_stop;
+        cfg.interfaces(k).gap    = face{3};
         cfg.interfaces(k).dofs   = 'normal';
     end
 end
@@ -136,13 +137,13 @@ cfg.array_k_mult   = 0.003125;  % contact stiffness as a multiple of max(diag(K)
 
 % --- Impulsive forcing ---
 cfg.impulse_g   = 1e6;        % amplitude [g]
-cfg.impulse_dir = [0 0 1];    % direction in space, normalized afterwards
+cfg.impulse_dir = [0 0 -1];    % direction in space, normalized afterwards
 cfg.g_value     = 9.81e6;     % gravity in um/s^2: the mesh is in um, not m
 cfg.t_shock     = 10e-7;      % half-sine duration [s]
 
 % --- Integration ---
 cfg.dt        = 2e-9;
-cfg.tmax      = 30e-6;
+cfg.tmax      = 10e-6;
 cfg.RelTol    = 1e-8;         % ROM
 cfg.RelTolFOM = 1e-8;         % FOM
 cfg.output_stride = 10;       % output every N steps of dt
