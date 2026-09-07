@@ -19,7 +19,7 @@ classdef Assembly < handle
         
         function set.parallelized(self,val)
             self.parallelized = val;
-            adjust_parallel_settings(self);
+            % adjust_parallel_settings(self);
         end
         
         function adjust_parallel_settings(self)

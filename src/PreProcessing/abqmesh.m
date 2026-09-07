@@ -36,7 +36,7 @@ meshinfo.nodes = nodes(:, 2:end);
 
 % GET ELEMENTS
 b = regexp(a,'\<Element, type=([\w]*)\s\s(.*?)\s\s\*','tokens');
-
+nset = {};
 % parse elements
 for ii = 1 : length(b)
     eltype{ii} = b{ii}{1};

@@ -281,64 +281,72 @@ while istep<=Sopt.stepmax
             zref    = zref.*Dscaleold;
         end
     end
-    %% PREDICT
+   %% PREDICT
+
+% Determine predictor direction (in the unscaled system)
+if Sopt.flag
+    switch Sopt.predictor
+        case 'tangent'
+            % ... codice esistente per calcolare ztmp ...
+            [~,kk] = sort(abs(zref./max(abs(Xref),1e-4)),1,'descend');
+            warning('off','MATLAB:nearlySingularMatrix');
+            warning('off','MATLAB:singularMatrix');
+            for ik=1:length(kk)
+                k = kk(ik);
+                c = zeros(length(X0),1); c(k) = 1;
+                ztmp = [J(1:end-1,:);c']\[zeros(size(J,1)-1,1);1];
+                if ~any(isnan(ztmp))
+                    break;
+                end
+            end
+            warning('on','MATLAB:nearlySingularMatrix');
+            warning('on','MATLAB:singularMatrix');
+        case 'secant'
+            if istep>2
+                ztmp = X0-Xold;
+            else
+                ztmp = [J(1:end-1,:);c']\[zeros(size(J,1)-1,1);1];
+            end
+        otherwise
+            error('Unknown predictor specification.');
+    end
+    if any(isnan(ztmp))
+        error('Could not determine predictor direction.');
+    end
     
-    % Determine predictor direction (in the unscaled system)
-    if Sopt.flag
-        switch Sopt.predictor
-            case 'tangent'
-                [~,kk] = sort(abs(zref./max(abs(Xref),1e-4)),...
-                    1,'descend');
-                % Temporarily switch off warning
-                warning('off','MATLAB:nearlySingularMatrix');
-                warning('off','MATLAB:singularMatrix');
-                for ik=1:length(kk)
-                    k = kk(ik);
-                    c = zeros(length(X0),1); c(k) = 1;
-                    % Determine unit tangent to the solution
-                    % path (Eq. 4.8)
-                    ztmp = [J(1:end-1,:);c']\...
-                        [zeros(size(J,1)-1,1);1];
-                    if ~any(isnan(ztmp))
-                        % Successful!
-                        break;
-                    end
-                end
-                % Switch warning on again
-                warning('on','MATLAB:nearlySingularMatrix');
-                warning('on','MATLAB:singularMatrix');
-            case 'secant'
-                if istep>2
-                    % Secant predictor
-                    ztmp = X0-Xold;
-                else
-                    % Take tangent step at first iteration
-                    ztmp = [J(1:end-1,:);c']\...
-                        [zeros(size(J,1)-1,1);1];
-                end
-            otherwise
-                error('Unknown predictor specification.');
+    % Apply linear scaling to tangent
+    ztmp = ztmp./Sopt.Dscale;
+    z = ztmp/norm(ztmp);
+    
+    %% === NUOVO: Coerenza tangente con passo precedente ===
+    if istep > 2
+        step_old = X0 - Xold;  % direzione effettiva del passo precedente
+        if dot(z, step_old) < 0
+            z = -z;  % mantieni coerenza con la direzione di marcia
         end
-        if any(isnan(ztmp))
-            error('Could not determine predictor direction.');
-        end
-        % Apply linear scaling to tangent
-        ztmp = ztmp./Sopt.Dscale;
-        z = ztmp/norm(ztmp);
     else
-        % Trivial tangent, already initialized
-    end
-    
-    % Take step
-    XP = X0+dir*Sopt.ds*z;
-    
-    % Ensure forward stepping along solution path
-    if Sopt.flag
-        if (istep > 2) && ...
-                (transpose(X0-Xold)*(dir*Sopt.ds*z) < 0);
-            XP = X0-dir*Sopt.ds*z;
+        % Primo passo: usa la direzione del parametro
+        if z(end) * dir < 0
+            z = -z;
         end
     end
+    %% === FINE NUOVO ===
+    
+else
+    % Trivial tangent, already initialized
+end
+
+% Take step
+XP = X0 + Sopt.ds * z;   % <-- RIMUOVI 'dir*' qui!
+
+%% COMMENTARE O RIMUOVERE questo blocco:
+% % Ensure forward stepping along solution path
+% if Sopt.flag
+%     if (istep > 2) && ...
+%             (transpose(X0-Xold)*(dir*Sopt.ds*z) < 0);
+%         XP = X0-dir*Sopt.ds*z;
+%     end
+% end
     %% CORRECT
     if Sopt.flag
         % Determine reference data for parametrization equation
