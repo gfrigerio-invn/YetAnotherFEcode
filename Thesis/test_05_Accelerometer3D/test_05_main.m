@@ -143,11 +143,14 @@ cfg.t_shock     = 10e-7;      % half-sine duration [s]
 
 % --- Integration ---
 cfg.dt        = 2e-9;
-cfg.tmax      = 10e-6;
+cfg.tmax      = 30e-6;
 cfg.RelTol    = 1e-8;         % ROM
 cfg.RelTolFOM = 1e-8;         % FOM
 cfg.output_stride = 10;       % output every N steps of dt
-
+cfg.integrator    = 'newmark';       % 'ode15s' | 'genalpha' | 'newmark'
+cfg.h_int         = 1e-9;           % fixed step of the second-order schemes
+cfg.rho_inf       = 0.7;            % genalpha only
+cfg.newmark_alpha = 0;              % newmark only
 % Store the full displacement field of the FOM.
 cfg.save_full_field = true;
 
