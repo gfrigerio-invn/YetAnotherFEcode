@@ -8,7 +8,7 @@ clear; close all; clc;
 run_FOM       = 0; 
 run_ROM_MT    = 0; 
 run_ROM_MC    = 1;
-run_ROM_Rubin = 0;
+run_ROM_Rubin = 1;
 run_ROM_MCB   = 0; 
 run_ROM_MN    = 0;
 
@@ -45,7 +45,7 @@ fprintf('Directory creata: %s\n\n', save_dir);
 
 %% --- 3. INIZIALIZZAZIONE STRUTTURA BASE ---
 fprintf('Setting up the model...\n');
-DummyStruct = AbaqusStructure_V2();                  
+DummyStruct = AbaqusStructure();                  
 DummyStruct.filename = 'DummyStructureAbaqus_V4.inp'; 
 DummyStruct.elementType = 'TRI3';           
 DummyStruct.build();
@@ -62,10 +62,10 @@ k_base = max(diag(Kc));
 
 %% --- 3.1 SETUP INTERFACCE DI CONTATTO (T, B, L, R) ---
 % Estrazione GdL per le 4 facce (2=Y, 1=X)
-dofs_T = DummyStruct.get_specific_contact_dofs('T', 2);
-dofs_B = DummyStruct.get_specific_contact_dofs('B', 2);
-dofs_L = DummyStruct.get_specific_contact_dofs('L', 1);
-dofs_R = DummyStruct.get_specific_contact_dofs('R', 1);
+dofs_T = DummyStruct.get_contact_dofs('T', 2);
+dofs_B = DummyStruct.get_contact_dofs('B', 2);
+dofs_L = DummyStruct.get_contact_dofs('L', 1);
+dofs_R = DummyStruct.get_contact_dofs('R', 1);
 
 % Vettori concatenati per il solutore ODE
 contact_dofs = [dofs_T; dofs_B; dofs_L; dofs_R];
@@ -74,11 +74,11 @@ gaps_array   = [repmat(gap_T, length(dofs_T), 1); ...
                 repmat(gap_L, length(dofs_L), 1); ...
                 repmat(gap_R, length(dofs_R), 1)];
 
-% Struct organizzata per il Post-Processing
-Interfaces = struct();
-labels = {'T', 'B', 'L', 'R'};
-nodes_list = {DummyStruct.contact_nodes_T, DummyStruct.contact_nodes_B, ...
-              DummyStruct.contact_nodes_L, DummyStruct.contact_nodes_R};
+% % Struct organizzata per il Post-Processing
+% Interfaces = struct();
+% labels = {'T', 'B', 'L', 'R'};
+% nodes_list = {DummyStruct.get_contact_dofs('T',2), DummyStruct.get_contact_dofs('B',2), ...
+%               DummyStruct.get_contact_dofs('L',1), DummyStruct.get_contact_dofs('R',1)};
 
 for i = 1:length(labels)
     loc = labels{i};

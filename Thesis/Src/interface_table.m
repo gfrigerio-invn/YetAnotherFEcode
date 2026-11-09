@@ -12,8 +12,9 @@ function [faces, face_gap, face_nrm, d_ref] = interface_table(R, verbose)
 %   faces     {1 x n} interface labels
 %   face_gap  [1 x n] positive gap of each interface
 %   face_nrm  {1 x n} wall normal of each interface, [] when unknown
-%   d_ref     reference direction for the 'physical' view: the shock
-%             direction, so the panels show the motion the loading drives
+%   d_ref     reference direction for the 'physical' view: the shock AXIS,
+%             oriented along the positive global direction whatever the sign
+%             of the shock, so "up" in the plot is always +Z (for a Z shock)
 %
 % See also CONTACT_PLOT_QUANTITY.
 
@@ -35,6 +36,12 @@ function [faces, face_gap, face_nrm, d_ref] = interface_table(R, verbose)
 
     if isfield(R, 'cfg') && isfield(R.cfg, 'impulse_dir') && ~isempty(R.cfg.impulse_dir)
         d_ref = R.cfg.impulse_dir(:)' / norm(R.cfg.impulse_dir);
+        % The shock AXIS, but always pointing the positive way. Taking the shock
+        % direction with its sign made "up" in the plot follow the load: a shock
+        % along -Z was drawn along -Z, so a proof mass moving down appeared to
+        % rise, with the lower stoppers at +gap and the upper ones at -gap.
+        [~, i_dom] = max(abs(d_ref));
+        if d_ref(i_dom) < 0, d_ref = -d_ref; end
     else
         d_ref = [0 0 1];
     end

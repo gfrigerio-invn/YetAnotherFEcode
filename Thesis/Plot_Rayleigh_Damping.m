@@ -18,7 +18,7 @@ Q_ref = [5;             % Q alla frequenza f1
 dmprat = 0.0;
 
 % Numero di modi da visualizzare
-number_of_modes = 100;
+number_of_modes = 7000;
 
 % Ipotesi per le frequenze modali.
 % Sostituire questa frequenza con il vero passo modale del modello,
@@ -271,12 +271,12 @@ end
 loglog(f_ref/1e3, Q_ref, 'mo', ...
     'MarkerSize', 8, ...
     'MarkerFaceColor', 'm', ...
-    'DisplayName', 'Punti di riferimento');
+    'DisplayName', 'nchor points');
 
 grid on;
 xlabel('Frequency (kHz)');
 ylabel('Quality factor Q');
-title('Rayleigh damping calibrato su due punti frequenza-Q');
+title('Rayleigh damping calbrated from two anchor points');
 legend('Location', 'best');
 
 
@@ -284,24 +284,24 @@ legend('Location', 'best');
 
 figure('Color', 'w');
 
-plot(mode_number, Q_modes, 'ko-', ...
+semilogy(mode_number, Q_modes, 'ko-', ...
     'LineWidth', 1.5, ...
     'MarkerSize', 4, ...
     'DisplayName', 'Q_{total}');
 hold on;
 
-plot(mode_number, Q_alpha_modes, 'r--', ...
+semilogy(mode_number, Q_alpha_modes, 'r--', ...
     'LineWidth', 1.5, ...
     'DisplayName', 'Q_{\alpha}');
 
 if beta > 0
-    plot(mode_number, Q_beta_modes, 'b--', ...
+    semilogy(mode_number, Q_beta_modes, 'b--', ...
         'LineWidth', 1.5, ...
         'DisplayName', 'Q_{\beta}');
 end
 
 if dmprat > 0
-    plot(mode_number, Q_dmprat_modes, 'g--', ...
+    semilogy(mode_number, Q_dmprat_modes, 'g--', ...
         'LineWidth', 1.5, ...
         'DisplayName', 'Q_{dmprat}');
 end
@@ -309,7 +309,7 @@ end
 grid on;
 xlabel('Mode number');
 ylabel('Quality factor Q');
-title('Quality factor dei modi');
+title('Modes Q Factor');
 legend('Location', 'best');
 
 

@@ -1,0 +1,2 @@
+CB: GRE first 25 % [0.1887 0.5813 0.3043 0.6053] %, tracking within 1 % [98.6 76.5 80.3 76.5] us, at phi [50 100 200 300] -> phi* = 50 (<= 2 x best = 0.3775 %)
+Rubin: GRE first 25 % [0.1442 0.8453 0.3645 0.3186] %, tracking within 1 % [109.8 68.2 76.6 80.9] us, at phi [50 100 200 300] -> phi* = 50 (<= 2 x best = 0.2885 %)

@@ -4,65 +4,39 @@ function [N, g, info] = contact_operator(Struct, ifaces)
 %   [N, g, info] = CONTACT_OPERATOR(Struct, ifaces)
 %
 % Every contact node contributes one unilateral constraint, written as one row
-% of N. With u the displacement vector in the constrained numbering,
+% of N.
 %
 %       p = N*u - g                                              (penetration)
 %
-% is positive where the node has crossed its wall, and the penalty force and
-% its Jacobian follow from the same operator:
+% is positive where the node has crossed its wall
 %
-%       f = N(a,:)' * (k(a) .* p(a))        a = active rows, p(a) > 0
-%       J = N(a,:)' * diag(k(a)) * N(a,:)
-%
-% Because the direction of the wall is carried by the row of N, the gap is a
-% plain distance and is always positive. This replaces the earlier convention,
-% where the gap was signed and its sign told which side the wall was on: that
-% convention could only describe walls normal to a coordinate axis, and it
-% needed the activation test sign(gap)*(u-gap) > 0 to undo the sign.
-%
-% Reduced models use the same operator. If u = Pc*q maps reduced coordinates to
-% physical DOFs, then N*Pc is the operator in reduced coordinates and every
-% formula above holds unchanged.
+% Reduced models: N*Pc is.
 %
 % INTERFACE SPECIFICATION
 %   ifaces is a struct array, one entry per wall, with fields:
 %
-%     set      name of the node set of the contacting surface, as known to
-%              Struct (from the mesh file or from a geometric selector).
-%     normal   [1 x n_dim] direction along which penetration is measured,
-%              pointing from the body towards the wall. Normalized internally.
+%     set      name of the node set of the contacting surface.
+%     normal   [1 x n_dim] direction along which penetration is measured.
 %     gap      distance from the undeformed node to the wall, measured along
 %              normal. Scalar (same for every node) or [n_nodes x 1].
-%              Use this when the wall is parallel to the contacting surface.
-%     plane    alternative to gap, for a wall that is NOT parallel to the
+%     plane    ALTERNATIVE to gap, for a wall that is NOT parallel to the
 %              surface: struct('point', p0) with p0 a point of the wall plane.
 %              The gap is then computed node by node,
 %                   g_i = normal * (p0 - x_i)',
-%              so it varies along the surface exactly as the two planes
-%              diverge. This is the general case; a scalar gap is the
-%              particular case of parallel planes.
 %     dofs     'normal' (default) keeps one DOF per node, the one along the
-%              normal, and requires the normal to be aligned with an axis.
+%              normal, and requires the normal to be aligned with a DOF of the
+%              node: an axis, or any direction once local contact frames are
+%              set (FeStructure.set_contact_frames), which is the way to treat
+%              an oblique wall with one DOF per node.
 %              'all' keeps every DOF of the node, which is what an oblique
 %              normal needs, since the contact force then has components on
-%              all of them. This choice only affects the interface partition
-%              returned in info.bnd_dofs, not N itself.
-%
-%   A legacy cell array {label, direction, signed_gap; ...} is also accepted
-%   and converted, so that configurations written for the signed-gap
-%   convention keep working.
+%              all of them.
 %
 % OUTPUT
 %   N      [n_c x n_free] sparse contact operator, one row per contact node
 %   g      [n_c x 1] positive gaps
-%   info   .nodes      {1 x n_iface} node IDs actually retained per interface
-%          .bnd_dofs   interface partition, DOFs in the constrained numbering
-%          .blocks     [1 x n_iface] size of each block of bnd_dofs
-%          .rows       [1 x n_iface] rows of N belonging to each interface
-%          .labels     {1 x n_iface} set names
-%          .spec       the normalized interface specification
-%
-% See also FESTRUCTURE, TRANSIENTSOLVERODE, INTERFACE_REDUCTION.
+%   info
+
 
     ifaces = normalize_interface_spec(ifaces);
     n_if   = numel(ifaces);
@@ -104,31 +78,36 @@ function [N, g, info] = contact_operator(Struct, ifaces)
         end
 
         % --- which DOFs of a node take part -------------------------------
-        [~, ax] = max(abs(nrm));
-        aligned = abs(abs(nrm(ax)) - 1) < 1e-10;
-        switch lower(s.dofs)
-            case 'normal'
-                if ~aligned
-                    error('contact_operator:ObliqueNormal', ...
-                        ['Interface ''%s'': dofs = ''normal'' keeps only the DOF ' ...
-                         'along the normal, which requires the normal to be ' ...
-                         'aligned with an axis. This one is [%s]. Use ' ...
-                         'dofs = ''all''.'], s.set, num2str(nrm, ' %.4g'));
-                end
-                keep = ax;
-            case 'all'
-                keep = 1:nD;
-            otherwise
-                error('contact_operator:BadDofs', ...
-                    'Interface ''%s'': dofs must be ''normal'' or ''all''.', s.set);
+        if ~any(strcmpi(s.dofs, {'normal', 'all'}))
+            error('contact_operator:BadDofs', ...
+                'Interface ''%s'': dofs must be ''normal'' or ''all''.', s.set);
         end
+        has_frames = isprop(Struct, 'frame_index') && ~isempty(Struct.frame_index);
 
         % --- assemble the rows, skipping clamped nodes --------------------
         kept = false(numel(ids), 1);
         n_blk0 = numel(bnd);
-        kk = keep(:);
-        nk = nrm(kk); nk = nk(:);
         for j = 1:numel(ids)
+            n_loc = nrm(:);
+            if has_frames && Struct.frame_index(ids(j)) > 0
+                n_loc = Struct.frame_R(:, :, Struct.frame_index(ids(j)))' * n_loc;
+            end
+            if strcmpi(s.dofs, 'normal')
+                [~, ax] = max(abs(n_loc));
+                if abs(abs(n_loc(ax)) - 1) >= 1e-10
+                    error('contact_operator:ObliqueNormal', ...
+                        ['Interface ''%s'': dofs = ''normal'' keeps only the DOF ' ...
+                         'along the normal, which requires the normal to be ' ...
+                         'aligned with a DOF of the node. This one is [%s] in the ' ...
+                         'node frame. Set local contact frames ' ...
+                         '(cfg.local_contact_frames = true) or use dofs = ''all''.'], ...
+                         s.set, num2str(n_loc', ' %.4g'));
+                end
+                kk = ax;
+            else
+                kk = (1:nD)';
+            end
+            nk = n_loc(kk); nk = nk(:);
             cd = Struct.AssemblyObj.free2constrained_index((ids(j)-1)*nD + kk');
             cd = cd(:);
 
@@ -172,56 +151,4 @@ function [N, g, info] = contact_operator(Struct, ifaces)
              'shared nodes from one of the sets.'], numel(bnd) - numel(u_bnd));
     end
     info.bnd_dofs = bnd(sort(ia));
-end
-
-% =====================================================================
-function s = normalize_interface_spec(spec)
-%NORMALIZE_INTERFACE_SPEC Bring both accepted formats to one struct array.
-% The legacy format is the cell array {label, direction, signed_gap; ...},
-% where the sign of the gap told which side of the DOF the wall was on. It
-% maps to a normal along that axis with the sign of the gap, and a positive
-% gap equal to its magnitude.
-
-    if iscell(spec)
-        n = size(spec, 1);
-        s = repmat(struct('set', '', 'normal', [], 'gap', [], ...
-                          'plane', [], 'dofs', 'normal'), 1, n);
-        for i = 1:n
-            d = spec{i,2}; gp = spec{i,3};
-            if gp == 0
-                error('contact_operator:ZeroGap', ...
-                    'Interface ''%s'': a zero gap gives no side for the wall.', spec{i,1});
-            end
-            nrm = zeros(1, max(d, 2));
-            nrm(d) = sign(gp);
-            s(i).set = spec{i,1};
-            s(i).normal = nrm;
-            s(i).gap = abs(gp);
-        end
-        return
-    end
-
-    if ~isstruct(spec)
-        error('contact_operator:BadSpec', ...
-            'The interfaces must be a struct array or the legacy cell array.');
-    end
-
-    s = spec(:)';
-    for i = 1:numel(s)
-        if ~isfield(s, 'dofs') || isempty(s(i).dofs), s(i).dofs = 'normal'; end
-        if ~isfield(s, 'plane'), s(i).plane = []; end
-        if ~isfield(s, 'gap'),   s(i).gap = []; end
-        if isempty(s(i).gap) && isempty(s(i).plane)
-            error('contact_operator:NoGap', ...
-                'Interface ''%s'': give either gap or plane.', s(i).set);
-        end
-        if ~isempty(s(i).gap) && ~isempty(s(i).plane)
-            error('contact_operator:TwoGaps', ...
-                'Interface ''%s'': gap and plane are alternatives, not both.', s(i).set);
-        end
-        if isempty(s(i).normal)
-            error('contact_operator:NoNormal', ...
-                'Interface ''%s'': the normal is missing.', s(i).set);
-        end
-    end
 end

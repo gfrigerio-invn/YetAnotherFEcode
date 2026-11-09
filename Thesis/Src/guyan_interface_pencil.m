@@ -66,6 +66,23 @@ function [K_bb, M_bb, Psi] = guyan_interface_pencil(Struct, contact_dofs)
 %
 %   Psi does not depend on how many fixed-interface modes the ROM keeps, so this
 %   can be computed once per model and reused across the whole sweep.
+%
+%   MEMORY. Psi is dense, n_dofs x n_b: on the fine mesh (107k interior DOFs,
+%   11240 interface DOFs) that is 10 GB, and the old one-shot form held it
+%   twice (full(K_ib) and the solution) and ran out of memory on a 32 GB
+%   machine. The pencil is therefore assembled one block of columns J at a
+%   time, never forming Psi, from the sparse factor of K_ii computed once:
+%
+%       Psi_J      = -K_ii \ K_ib(:,J)
+%       K_bb(:,J)  = K_bb0(:,J) + K_bi Psi_J
+%       M_bb(:,J)  = M_bb0(:,J) + M_bi Psi_J - K_bi ( K_ii \ (M_ib(:,J) + M_ii Psi_J) )
+%
+%   The first is the Schur complement: the terms Psi_i'K_ib + Psi_i'K_ii Psi_i
+%   of Psi'Kc Psi cancel exactly, since K_ii Psi_i = -K_ib. The second uses
+%   Psi_i' = -K_bi K_ii^-1 to turn the left factor into one more solve. Same
+%   matrices as Psi'*Kc*Psi and Psi'*Mc*Psi, at the price of two solves per
+%   column instead of one, with memory n_b^2 plus one block. Psi itself is
+%   built only when the third output is requested.
 
 b = contact_dofs(:);
 
@@ -75,16 +92,39 @@ Kc = Struct.AssemblyObj.constrain_matrix(Struct.K);
 n_dofs_c = size(Kc, 1);
 i_idx    = setdiff(1:n_dofs_c, b)';
 n_b      = numel(b);
+n_i      = numel(i_idx);
 
-% Constraint modes: one linear solve per interface DOF
-K_ii  = Kc(i_idx, i_idx);
-K_ib  = Kc(i_idx, b);
-Psi_i = -(K_ii \ full(K_ib));
+K_ii = Kc(i_idx, i_idx);   K_ib = Kc(i_idx, b);
+M_ii = Mc(i_idx, i_idx);   M_ib = Mc(i_idx, b);
+K_bi = K_ib';              M_bi = M_ib';
 
-Psi          = zeros(n_dofs_c, n_b);
-Psi(b, :)    = eye(n_b);
-Psi(i_idx,:) = Psi_i;
+% One sparse Cholesky of the interior, reused by every block. The assembled
+% K_ii is symmetric only up to the roundoff of the assembly, which is enough
+% for decomposition to refuse 'chol' (and made the former K_ii \ K_ib fall back
+% to LU without saying so); symmetrising it is the same matrix.
+K_ii = (K_ii + K_ii') / 2;
+dK   = decomposition(K_ii, 'chol');
 
-K_bb = Psi' * Kc * Psi;   K_bb = (K_bb + K_bb') / 2;
-M_bb = Psi' * Mc * Psi;   M_bb = (M_bb + M_bb') / 2;
+% Block width: about 0.5 GB per dense n_i x n_J block, of which three are alive
+% at once (right-hand side, Psi_J, second solve).
+BLOCK_BYTES = 0.5 * 2^30;
+n_J = max(1, min(n_b, floor(BLOCK_BYTES / (8 * n_i))));
+
+K_bb = full(Kc(b, b));
+M_bb = full(Mc(b, b));
+want_psi = nargout >= 3;
+if want_psi
+    Psi       = zeros(n_dofs_c, n_b);
+    Psi(b, :) = eye(n_b);
+end
+for j0 = 1:n_J:n_b
+    J = j0 : min(j0 + n_J - 1, n_b);
+    Psi_J = -(dK \ full(K_ib(:, J)));
+    K_bb(:, J) = K_bb(:, J) + K_bi * Psi_J;
+    M_bb(:, J) = M_bb(:, J) + M_bi * Psi_J - K_bi * (dK \ full(M_ib(:, J) + M_ii * Psi_J));
+    if want_psi, Psi(i_idx, J) = Psi_J; end
+end
+
+K_bb = (K_bb + K_bb') / 2;
+M_bb = (M_bb + M_bb') / 2;
 end

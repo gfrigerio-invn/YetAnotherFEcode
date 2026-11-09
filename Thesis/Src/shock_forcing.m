@@ -32,10 +32,18 @@ function shock = shock_forcing(Struct, cfg)
     end
 
     dir_unit = cfg.impulse_dir(:) / norm(cfg.impulse_dir);
-    dir_vec  = zeros(n_dofs, 1);
+    % Built on the full numbering and then constrained, so that the local
+    % contact frames (if any) can rotate it: the rigid-body direction is a
+    % global vector, and in local DOFs it reads Trot'*r.
+    n_full  = size(Struct.M, 1);
+    dir_ful = zeros(n_full, 1);
     for d = 1:nD
-        dir_vec(d:nD:n_dofs) = dir_unit(d);
+        dir_ful(d:nD:n_full) = dir_unit(d);
     end
+    if isprop(Struct, 'Trot') && ~isempty(Struct.Trot)
+        dir_ful = Struct.to_local(dir_ful);
+    end
+    dir_vec = Struct.AssemblyObj.constrain_vector(dir_ful);
 
     amp = cfg.impulse_g * cfg.g_value;
 

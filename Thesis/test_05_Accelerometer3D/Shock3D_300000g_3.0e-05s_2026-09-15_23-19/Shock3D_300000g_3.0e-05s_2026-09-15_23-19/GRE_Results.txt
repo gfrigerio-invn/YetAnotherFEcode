@@ -1,0 +1,19 @@
+======================================================
+ GLOBAL RELATIVE ERROR (GRE) & TIME REPORT - 3D
+======================================================
+ Interfaces: stop_A_top, stop_A_bot, stop_B_top, stop_B_bot, stop_C_top, stop_C_bot, stop_D_top, stop_D_bot
+ Reference metric: GRE_full (window 25%)
+ Integration floor: 6.10e-06 %
+ Eref = 1.3453e+04
+
+>>> CASE: Q = 5 | k_mult = 0.003125 | Newmark <<<
+  MTNM      Phi 200 | CC   - | GRE_full   34.4961% | GRE_win    1.4007% | Off    59.3s | On    26.0s
+               within 1%:  5.51 us  (inside 18%)
+  RubinNM   Phi 200 | CC   - | GRE_full   30.0011% | GRE_win    0.0139% | Off    11.8s | On    86.6s
+               within 1%:  12.40 us  (inside 41%)
+
+
+--- Tracking time ---
+ROM                         < 0.1%        < 1%       < 10%
+MTNM Phi200                3.87us     5.51us     9.56us
+RubinNM Phi200             8.45us    12.40us    15.66us

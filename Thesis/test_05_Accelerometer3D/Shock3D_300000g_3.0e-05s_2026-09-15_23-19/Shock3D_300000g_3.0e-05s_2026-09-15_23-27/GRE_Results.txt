@@ -1,0 +1,46 @@
+======================================================
+ GLOBAL RELATIVE ERROR (GRE) & TIME REPORT - 3D
+======================================================
+ Interfaces: stop_A_top, stop_A_bot, stop_B_top, stop_B_bot, stop_C_top, stop_C_bot, stop_D_top, stop_D_bot
+ Reference metric: GRE_full (window 25%)
+ Integration floor: 6.10e-06 %
+ Eref = 1.3453e+04
+
+>>> CASE: Q = 5 | k_mult = 0.003125 | Newmark <<<
+  RubinIRGNM Phi 050 | CC  16 | GRE_full   60.4069% | GRE_win    2.3590% | Off     5.2s | On     4.2s
+               within 1%:  5.58 us  (inside 18%)
+  RubinIRGNM Phi 050 | CC  32 | GRE_full  101.8857% | GRE_win    4.6790% | Off     5.1s | On     5.4s
+               within 1%:  5.04 us  (inside 17%)
+  RubinIRGNM Phi 050 | CC  64 | GRE_full  108.3548% | GRE_win    2.1296% | Off     5.1s | On    14.3s
+               within 1%:  5.02 us  (inside 16%)
+  RubinIRGNM Phi 050 | CC 128 | GRE_full  123.3883% | GRE_win    2.3170% | Off     5.1s | On    25.7s
+               within 1%:  5.02 us  (inside 16%)
+  RubinIRGNM Phi 100 | CC  16 | GRE_full   35.7315% | GRE_win    1.1452% | Off     7.1s | On    14.0s
+               within 1%:  6.14 us  (inside 20%)
+  RubinIRGNM Phi 100 | CC  32 | GRE_full   52.1534% | GRE_win    0.8293% | Off     7.1s | On    18.1s
+               within 1%:  6.29 us  (inside 22%)
+  RubinIRGNM Phi 100 | CC  64 | GRE_full   66.3980% | GRE_win    1.2662% | Off     7.1s | On    22.5s
+               within 1%:  5.76 us  (inside 19%)
+  RubinIRGNM Phi 100 | CC 128 | GRE_full   36.7112% | GRE_win    2.1691% | Off     7.1s | On    32.6s
+               within 1%:  5.54 us  (inside 18%)
+  RubinNM   Phi 050 | CC   - | GRE_full  112.5037% | GRE_win    2.2121% | Off     5.1s | On    41.3s
+               within 1%:  5.02 us  (inside 16%)
+  RubinNM   Phi 100 | CC   - | GRE_full   39.3854% | GRE_win    2.2562% | Off     7.1s | On    50.8s
+               within 1%:  5.54 us  (inside 18%)
+  RubinNM   Phi 200 | CC   - | GRE_full   30.0011% | GRE_win    0.0139% | Off    11.7s | On    87.5s
+               within 1%:  12.40 us  (inside 41%)
+
+
+--- Tracking time ---
+ROM                         < 0.1%        < 1%       < 10%
+RubinIRGNM Phi50 CC16      3.84us     5.58us    13.19us
+RubinIRGNM Phi50 CC32      3.84us     5.04us     8.95us
+RubinIRGNM Phi50 CC64      3.78us     5.02us     8.95us
+RubinIRGNM Phi50 CC128     3.78us     5.02us     8.61us
+RubinIRGNM Phi100 CC16     4.33us     6.14us     9.63us
+RubinIRGNM Phi100 CC32     4.83us     6.29us     9.40us
+RubinIRGNM Phi100 CC64     4.66us     5.76us    13.20us
+RubinIRGNM Phi100 CC128     4.73us     5.54us     9.98us
+RubinNM Phi50              3.78us     5.02us     8.57us
+RubinNM Phi100             4.73us     5.54us     9.87us
+RubinNM Phi200             8.45us    12.40us    15.66us

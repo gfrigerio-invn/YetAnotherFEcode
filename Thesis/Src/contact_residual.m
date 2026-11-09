@@ -3,6 +3,10 @@ function fh = contact_residual(M, K, C, Nop, gap, k_pen, F_ext, Scomp)
 %
 %   fh = CONTACT_RESIDUAL(M, K, C, Nop, gap, k_pen, F_ext, Scomp)
 %   [r, drdqdd, drdqd, drdq, c0] = fh(q, qd, qdd, t)
+%   [r, drdqdd, drdqd, drdq, c0, act, fa] = fh(q, qd, qdd, t)
+%
+% act and fa are the active set and the force on it, as contact_solve returned
+% them for this q: the integrator keeps them to output the contact force.
 %
 % Builds the handle ImplicitNewmark and GeneralizedAlpha expect (see
 % src/TimeIntegration/ResidualFunctions/residual_nonlinear.m for the
@@ -13,6 +17,21 @@ function fh = contact_residual(M, K, C, Nop, gap, k_pen, F_ext, Scomp)
 %   drdqd  = C
 %   drdq   = K + d F_contact / dq
 %
+% WHY THIS IS WORTH DOING. ode15s integrates the first-order form and so
+% factorises a 2n x 2n state-space Jacobian at every decomposition, while the
+% Newmark family factorises S = M + gamma*h*C + beta*h^2*drdq, which is n x n.
+% Measured on this model: 0.42 s against 4.69 s per factorisation.
+%
+% The contact force and drdq come from a single contact_tangent call, so they
+% are the exact derivative of one another. That matters more here than under
+% ode15s: Newton needs a tangent consistent with the residual it is driving to
+% zero, and an active set decided twice makes the iteration stall exactly on
+% the step where a node starts touching.
+%
+% c0 is the scale the integrators divide the residual norm by when testing
+% convergence. Every term of r contributes, the contact force included:
+% leaving it out would make the test optimistic during an impact, which is the
+% only moment it has to be trusted.
 %
 % INPUT
 %   M, K, C   [n x n] system matrices, already constrained
@@ -28,11 +47,16 @@ function fh = contact_residual(M, K, C, Nop, gap, k_pen, F_ext, Scomp)
     k_pen = k_pen(:);
     gap   = gap(:);
     Nop_t = Nop';                      % applied at every evaluation
+    % Contact factor and tangent of the last active sets. Shared with the
+    % nested function, so it lives exactly as long as this closure, i.e. one
+    % integration of one model (see contact_factor).
+    ccache = contact_factor('new');
 
     fh = @residual;
 
-    function [r, drdqdd, drdqd, drdq, c0] = residual(q, qd, qdd, t)
-        [F_pen, K_eff] = contact_tangent(q, K, Nop, Nop_t, gap, k_pen, Scomp);
+    function [r, drdqdd, drdqd, drdq, c0, act, fa] = residual(q, qd, qdd, t)
+        [F_pen, K_eff, act, fa, ccache] = contact_tangent(q, K, Nop, Nop_t, gap, ...
+                                                          k_pen, Scomp, ccache);
 
         F_inertial = M * qdd;
         F_damping  = C * qd;

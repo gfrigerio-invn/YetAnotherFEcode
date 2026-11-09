@@ -4,23 +4,14 @@ classdef TransientSolverNewmark < handle
 %   solver = TransientSolverNewmark(M, K, C)
 %   [t, q] = solver.solve(tmax, dt, q0, qd0, F_handle, ...)
 %
-% Same signature as TransientSolverOde and TransientSolverMassless
 %
-% WHY NOT CALL THE YaFEc CLASSES DIRECTLY. src/TimeIntegration/ImplicitNewmark
-% and GeneralizedAlpha implement exactly these schemes, and the coefficients
-% and the Prediction/Correction formulas below are copied from them so the
-% results are the same to machine precision. Their solution grows by concatenation, q = [q q_new], at
+% Custom version of YaFEc classes src/TimeIntegration/ImplicitNewmark
+% and GeneralizedAlpha
+% Their solution grows by concatenation, q = [q q_new], at
 % every step.
 %
 %
-% THE STEP IS FIXED. The adaptive stepping in the YaFEc classes is not usable
-% and is not reproduced: it changes h inside the Newton loop rather than
-% between steps, and hmax is declared but never applied, so h can grow without
-% bound. Choose h from the contact duration: the events on this model last
-% about 60 ns, and a step that resolves fewer than roughly twelve points
-% across one starts merging impacts.
-%
-% See also TRANSIENTSOLVERODE, CONTACT_RESIDUAL, CONTACT_TANGENT.
+% THE STEP IS FIXED. The adaptive stepping in the YaFEc classes is broken
 
     properties
         M, K, C
@@ -31,7 +22,7 @@ classdef TransientSolverNewmark < handle
             obj.M = M;  obj.K = K;  obj.C = C;
         end
 
-        function [t, q_history] = solve(obj, tmax, dt, q0, qd0, F_handle, varargin)
+        function [t, q_history, cf] = solve(obj, tmax, dt, q0, qd0, F_handle, varargin)
             p = inputParser;
             addParameter(p, 'ContactOperator', []);
             addParameter(p, 'ContactGap', []);
@@ -39,11 +30,11 @@ classdef TransientSolverNewmark < handle
             addParameter(p, 'ContactCompliance', []);
             addParameter(p, 'Scheme', 'genalpha');   % 'genalpha' | 'newmark'
             addParameter(p, 'RhoInf', 0.7);          % genalpha: 1 = no numerical damping
-            addParameter(p, 'Alpha', 0);             % newmark: 0 = trapezoidal, conservative
-            addParameter(p, 'TimeStep', []);         % h; defaults to dt
-            addParameter(p, 'RelTol', 1e-6);         % on the Newton residual
+            addParameter(p, 'Alpha', 0);             % newmark: 0 = trapezoidal, conservative on the Newton residua
+            addParameter(p, 'RelTol', 1e-6);         
             addParameter(p, 'MaxNRit', 25);
             addParameter(p, 'OutputTimes', []);
+            addParameter(p, 'ForceStride', []);
             addParameter(p, 'Label', 'model');
             addParameter(p, 'qdd0', []);
             parse(p, varargin{:});
@@ -59,14 +50,9 @@ classdef TransientSolverNewmark < handle
             end
             if isscalar(k), k = k * ones(numel(gap), 1); end
 
-            h = args.TimeStep;
-            if isempty(h), h = dt; end
+            h = dt;
 
             % --- output grid ---------------------------------------------
-            % The comparison contract of the post-processing is that every
-            % model lands on the same instants. A step that does not divide
-            % the output spacing would need interpolation, which would quietly
-            % smooth exactly the impacts this is meant to resolve.
             if isempty(args.OutputTimes)
                 t = 0 : h : tmax;
             else
@@ -83,6 +69,28 @@ classdef TransientSolverNewmark < handle
             end
             n_out = numel(t);
             q_history = zeros(n, n_out);
+
+            % --- contact force sampling -------------------------------------
+            % Triplets of the active constraints only, assembled into a sparse
+            % matrix at the end: most constraints are open most of the time.
+            want_f = nargout >= 3;
+            if want_f
+                f_stride = args.ForceStride;
+                if isempty(f_stride)
+                    f_stride = max(1, round((t(min(2, n_out)) - t(1)) / h));
+                end
+                if f_stride < 1 || f_stride ~= round(f_stride)
+                    error('TSN:BadForceStride', ...
+                        'ForceStride must be a positive integer, got %g.', f_stride);
+                end
+                n_c   = numel(gap);
+                n_f   = floor(round(tmax / h) / f_stride) + 1;
+                t_f   = (0:n_f-1) * f_stride * h;
+                fr = cell(n_f, 1);  fv = cell(n_f, 1);
+                [fa0, act0] = contact_solve(N*q0 - gap, k, args.ContactCompliance);
+                fr{1} = find(act0);  fv{1} = fa0(:);
+                i_f = 2;
+            end
 
             % --- scheme coefficients -------------------------------------
             % Copied from src/TimeIntegration/GeneralizedAlpha.m from
@@ -161,7 +169,7 @@ classdef TransientSolverNewmark < handle
                 % Newton-Raphson
                 it = 0;
                 while true
-                    [r, Mt, Ct, Kt, c0] = Res(q_new, qd_new, qdd_new, tc);
+                    [r, Mt, Ct, Kt, c0, act, fa] = Res(q_new, qd_new, qdd_new, tc);
                     if norm(r)/c0 < args.RelTol, break; end
                     it = it + 1;
                     if it > args.MaxNRit
@@ -180,6 +188,13 @@ classdef TransientSolverNewmark < handle
                     a = a_new + qdd_new*(1 - alpha_f)/(1 - alpha_m);
                 end
                 q_old = q_new;  qd_old = qd_new;  qdd_old = qdd_new;
+
+                % The last residual evaluation is at the accepted q_new (the
+                % loop leaves right after it), so act and fa belong to it.
+                if want_f && mod(s, f_stride) == 0 && i_f <= n_f
+                    fr{i_f} = find(act);  fv{i_f} = fa(:);
+                    i_f = i_f + 1;
+                end
 
                 % Store only where the output grid asks for it.
                 if i_out <= n_out && abs(tc - t(i_out)) < 0.5*h
@@ -205,6 +220,13 @@ classdef TransientSolverNewmark < handle
                      'integer number of steps.'], i_out-1, n_out);
                 t = t(1:i_out-1);
                 q_history = q_history(:, 1:i_out-1);
+            end
+            if want_f
+                n_got = i_f - 1;
+                cols  = repelem((1:n_got)', cellfun(@numel, fr(1:n_got)));
+                cf = struct('t', t_f(1:n_got), ...
+                            'F', sparse(vertcat(fr{1:n_got}), cols, vertcat(fv{1:n_got}), n_c, n_got), ...
+                            'k', k(:));
             end
         end
     end

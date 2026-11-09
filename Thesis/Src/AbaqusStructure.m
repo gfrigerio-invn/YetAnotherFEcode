@@ -383,7 +383,58 @@ classdef AbaqusStructure < handle
             xlabel('X [m]'); ylabel('Y [m]');
             axis equal; grid on;
         end
-
+function plot_nodeset(obj)
+            % PLOT_NODESET Plot the mesh highlighting both contact nodes and constrained (BC) nodes.
+            if isempty(obj.nodes) || isempty(obj.elements)
+                error('AbaqusStructure:NoMesh', 'Mesh not found. Run build() first.');
+            end
+            
+            elementPlot = obj.elements(:, obj.plot_connectivity_index());
+            
+            figure('Name', 'Node Sets (Contact & BC)', 'Color', 'w', 'Units', 'normalized', ...
+                'Position', [0.3 0.25 0.4 0.6]);
+            
+            % Plot base mesh
+            PlotMesh(obj.nodes, elementPlot, 0);
+            hold on;
+            
+            % Array to keep track of plotted handles for the legend
+            h_plot = gobjects(0); 
+            
+            % 1. Plot constrained (Boundary Condition) nodes
+            if ~isempty(obj.bc_nodes)
+                h_bc = plot(obj.nodes(obj.bc_nodes, 1), obj.nodes(obj.bc_nodes, 2), ...
+                    'ks', 'MarkerSize', 8, 'MarkerFaceColor', 'r', 'LineWidth', 1.2, ...
+                    'LineStyle', 'none', ...
+                    'DisplayName', sprintf('Fixed Nodes (%d)', numel(obj.bc_nodes)));
+                h_plot(end+1) = h_bc;
+            end
+            
+            % 2. Plot contact nodes (if any)
+            if ~isempty(obj.contact_labels)
+                markers = {'o', 'd', '^', 'v', '>', '<', 'p', 'h'};
+                for i = 1:numel(obj.contact_labels)
+                    lbl = obj.contact_labels{i};
+                    n = obj.contact_sets.(lbl);
+                    if isempty(n), continue; end
+                    
+                    h_c = plot(obj.nodes(n, 1), obj.nodes(n, 2), ...
+                        markers{mod(i-1, numel(markers))+1}, ...
+                        'MarkerSize', 8, 'LineWidth', 1.5, 'LineStyle', 'none', ...
+                        'DisplayName', sprintf('Contact: %s (%d nodes)', lbl, numel(n)));
+                    h_plot(end+1) = h_c;
+                end
+            end
+            
+            % Add legend and formatting
+            if ~isempty(h_plot)
+                legend(h_plot(isgraphics(h_plot)), 'Location', 'bestoutside');
+            end
+            
+            title('Mesh V2: Contact Interfaces and Fixed nodes');
+            xlabel('X [m]'); ylabel('Y [m]');
+            axis equal; grid on;
+        end
         function plot_mode(obj, mode_idx, scale_factor)
             % PLOT_MODE Mode shape mode_idx over the undeformed mesh.
             if isempty(obj.frequencies) || isempty(obj.mode_shapes)
@@ -447,6 +498,77 @@ classdef AbaqusStructure < handle
             title(sprintf('Static Deformation (Scale Factor: %g)', scale_factor));
             xlabel('X [m]'); ylabel('Y [m]');
             axis equal; grid on;
+        end
+        function plot_modes_thesis(obj, mode_indices, scale_factor)
+            % PLOT_MODES_THESIS Plot multiple modes in a single figure for LaTeX export.
+            % By default plots the first 5 modes in a compact 2x3 grid.
+            
+            if isempty(obj.frequencies) || isempty(obj.mode_shapes)
+                error('AbaqusStructure:NoModes', ...
+                    'No modes available. Run compute_eigenmodes() first.');
+            end
+            
+            % Parametri di default: i primi 5 modi
+            if nargin < 2 || isempty(mode_indices)
+                mode_indices = 1:min(5, length(obj.frequencies));
+            end
+            
+            if nargin < 3 || isempty(scale_factor)
+                % Fattore di scala di default mutuato da plot_mode
+                scale_factor = 500e-6 * 0.2; 
+            end
+            
+            n_modes_to_plot = length(mode_indices);
+            
+            % Imposta la geometria della griglia (es. 2 righe, 3 colonne per 5 modi)
+            cols = min(2, n_modes_to_plot);
+            rows = ceil(n_modes_to_plot / cols);
+            
+            elementPlot = obj.elements(:, obj.plot_connectivity_index());
+            
+            % Creazione figura (proporzioni allungate per accogliere più grafici)
+            figure('Name', 'Mode Shapes (Thesis Export)', 'Color', 'w', ...
+                'Units', 'normalized', 'Position', [0.1 0.1 0.6 0.7]);
+            
+            % Utilizzo di tiledlayout per minimizzare i margini bianchi (ideale per i PDF)
+            t = tiledlayout(rows, cols, 'TileSpacing', 'compact', 'Padding', 'compact');
+            
+            for i = 1:n_modes_to_plot
+                m_idx = mode_indices(i);
+                if m_idx > length(obj.frequencies)
+                    warning('Mode index %d non calcolato. Salto.', m_idx);
+                    continue;
+                end
+                
+                nexttile;
+                
+
+                % Estrai e traccia la forma modale deformata
+                v1 = reshape(obj.mode_shapes(:, m_idx), 2, []).';
+                PlotFieldonDeformedMesh(obj.nodes, elementPlot, v1, 'factor', scale_factor);
+                colorbar('off');
+                colormap jet;
+                set(findobj(gca, '-property', 'Marker'), 'Marker', 'none');
+                
+                % Formattazione specifica per la tesi in LaTeX
+                title(sprintf('Mode %d: %.1f Hz', m_idx, obj.frequencies(m_idx)), ...
+                      'Interpreter', 'latex', 'FontSize', 11);
+                
+                xlabel('$X$ [m]', 'Interpreter', 'latex');
+                ylabel('$Y$ [m]', 'Interpreter', 'latex');
+                
+                axis equal; 
+                grid on;
+                
+                % Fissa i limiti di colore tra 0 e 1 (essendo i modi normalizzati a massa massima)
+                clim([0, 1]); 
+            end
+            
+            % Aggiunge una singola colorbar globale per tutta la figura sul lato destro
+            cb = colorbar;
+            cb.Layout.Tile = 'east';
+            cb.TickLabelInterpreter = 'latex';
+            title(cb, '$|\Phi|$', 'Interpreter', 'latex', 'FontSize', 11);
         end
     end
 

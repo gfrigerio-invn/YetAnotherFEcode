@@ -21,8 +21,7 @@ function [contact, Interfaces] = build_interfaces(Struct, cfg)
 %   Interfaces       per-interface metadata for the post-processing: node IDs,
 %                    global DOF indices, nodal coordinates, wall normal and
 %                    per-node gaps
-%
-% See also CONTACT_OPERATOR, INTERFACE_REDUCTION, EXTRACT_CONTACT_RESPONSE.
+
 
     [N, gaps, cinfo] = contact_operator(Struct, cfg.interfaces);
 
@@ -36,7 +35,14 @@ function [contact, Interfaces] = build_interfaces(Struct, cfg)
     contact.dofs   = cinfo.bnd_dofs;
     contact.labels = cinfo.labels;
     contact.n_bnd  = numel(cinfo.bnd_dofs);
-    contact.k_base = full(max(diag(Kc)));
+    % The penalty scale is taken from the stiffness BEFORE any local contact
+    % frame: rotating the DOFs of a node changes its diagonal entries, and the
+    % contact stiffness must not depend on how the DOFs are oriented.
+    if isprop(Struct, 'k_diag_ref') && ~isempty(Struct.k_diag_ref)
+        contact.k_base = Struct.k_diag_ref;
+    else
+        contact.k_base = full(max(diag(Kc)));
+    end
     contact.info   = cinfo;
     contact.blocks = cell(1, numel(cinfo.blocks));
 
@@ -55,8 +61,12 @@ function [contact, Interfaces] = build_interfaces(Struct, cfg)
         % Per-node gaps, which differ from one another as soon as the wall is
         % not parallel to the surface. The scalar is kept for the plots that
         % expect a single value.
-        Interfaces.(lbl).gap_nodes = gaps(block);
-        Interfaces.(lbl).gap       = gaps(block(1));
+        % Gaps belong to the constraints (one per node), not to the interface
+        % DOFs: the two coincide with dofs = 'normal', but with dofs = 'all'
+        % a node contributes several DOFs and still a single constraint.
+        rows = cinfo.rows{i};
+        Interfaces.(lbl).gap_nodes = gaps(rows);
+        Interfaces.(lbl).gap       = gaps(rows(1));
         for d = 1:nD
             Interfaces.(lbl).(['global_' axis_name{d}]) = (ids - 1)*nD + d;
             Interfaces.(lbl).(['coord_'  axis_name{d}]) = Struct.nodes(ids, d);

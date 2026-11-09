@@ -1,0 +1,90 @@
+======================================================
+ GLOBAL RELATIVE ERROR (GRE) & TIME REPORT
+======================================================
+ Interfaces: T, B, L, R
+ Reference metric: GRE_full (window 25%)
+ Integration floor: 3.00e-05 %
+ Eref = 1.1514e-09 J
+
+>>> CASE: Q = 1000 | k_mult = 10 | genalpha <<<
+  CB        Phi 050 | CC   - | GRE_full   51.4022% | GRE_win    0.1887% | Off   0.09s | On  55.12s
+                 within 1%:  98.600 us  (inside 33%)
+  CB        Phi 100 | CC   - | GRE_full   71.1046% | GRE_win    0.5813% | Off   0.14s | On 148.79s
+                 within 1%:  76.450 us  (inside 25%)
+  CB        Phi 200 | CC   - | GRE_full   49.3524% | GRE_win    0.3043% | Off   0.58s | On 366.92s
+                 within 1%:  80.300 us  (inside 27%)
+  CB        Phi 300 | CC   - | GRE_full   82.2185% | GRE_win    0.6053% | Off   0.94s | On 664.71s
+                 within 1%:  76.500 us  (inside 25%)
+  CBIRG     Phi 050 | CC   4 | GRE_full   92.0193% | GRE_win   31.4693% | Off   0.10s | On  47.58s
+                 within 1%:  11.300 us  (inside 4%)
+  CBIRG     Phi 050 | CC   8 | GRE_full   84.5159% | GRE_win   28.3933% | Off   0.10s | On  48.93s
+                 within 1%:  21.950 us  (inside 7%)
+  CBIRG     Phi 050 | CC  13 | GRE_full   57.4379% | GRE_win    2.2424% | Off   0.10s | On  49.07s
+                 within 1%:  55.100 us  (inside 18%)
+  CBIRGSC   Phi 050 | CC   4 | GRE_full   55.2149% | GRE_win    2.8910% | Off   0.09s | On  45.72s
+                 within 1%:  35.450 us  (inside 11%)
+  CBIRGSC   Phi 050 | CC   8 | GRE_full   59.1722% | GRE_win    2.2862% | Off   0.09s | On  48.39s
+                 within 1%:  35.450 us  (inside 16%)
+  CBIRGSC   Phi 050 | CC  13 | GRE_full   52.1732% | GRE_win    1.1616% | Off   0.09s | On  47.72s
+                 within 1%:  65.400 us  (inside 22%)
+  MT        Phi 050 | CC   - | GRE_full   79.5899% | GRE_win   20.2276% | Off   0.11s | On  40.51s
+                 within 1%:  10.850 us  (inside 4%)
+  MT        Phi 100 | CC   - | GRE_full   70.9317% | GRE_win   34.2828% | Off   0.27s | On  86.93s
+                 within 1%:  11.750 us  (inside 4%)
+  MT        Phi 200 | CC   - | GRE_full   76.4297% | GRE_win   17.5847% | Off   1.20s | On 298.67s
+                 within 1%:  12.700 us  (inside 4%)
+  MT        Phi 300 | CC   - | GRE_full   87.3389% | GRE_win   27.0941% | Off   2.43s | On 563.18s
+                 within 1%:  13.150 us  (inside 4%)
+  Rubin     Phi 050 | CC   - | GRE_full   59.7126% | GRE_win    0.1442% | Off   0.10s | On  55.38s
+                 within 1%:  109.750 us  (inside 36%)
+  Rubin     Phi 100 | CC   - | GRE_full   70.5622% | GRE_win    0.8453% | Off   0.15s | On 152.91s
+                 within 1%:  68.200 us  (inside 23%)
+  Rubin     Phi 200 | CC   - | GRE_full   52.3549% | GRE_win    0.3645% | Off   0.58s | On 368.24s
+                 within 1%:  76.550 us  (inside 26%)
+  Rubin     Phi 300 | CC   - | GRE_full   38.7315% | GRE_win    0.3186% | Off   0.98s | On 661.43s
+                 within 1%:  80.850 us  (inside 27%)
+  RubinIRG  Phi 050 | CC   4 | GRE_full   83.2935% | GRE_win   30.8981% | Off   0.10s | On  43.71s
+                 within 1%:  11.200 us  (inside 4%)
+  RubinIRG  Phi 050 | CC   8 | GRE_full   87.8503% | GRE_win   24.8023% | Off   0.10s | On  45.88s
+                 within 1%:  22.550 us  (inside 8%)
+  RubinIRG  Phi 050 | CC  13 | GRE_full   52.0107% | GRE_win    2.3875% | Off   0.10s | On  48.22s
+                 within 1%:  56.300 us  (inside 19%)
+  RubinIRGSC Phi 050 | CC   4 | GRE_full   62.6166% | GRE_win    3.0769% | Off   0.09s | On  41.77s
+                 within 1%:  35.450 us  (inside 13%)
+  RubinIRGSC Phi 050 | CC   8 | GRE_full   60.4066% | GRE_win    2.2720% | Off   0.09s | On  44.86s
+                 within 1%:  35.400 us  (inside 11%)
+  RubinIRGSC Phi 050 | CC  13 | GRE_full   53.2683% | GRE_win    1.3732% | Off   0.09s | On  47.54s
+                 within 1%:  64.200 us  (inside 21%)
+
+
+--- Tracking time ---
+ROM                           < 0.1%        < 1%       < 10%
+CB Phi50                   27.650us   98.600us  135.000us
+CB Phi100                  37.800us   76.450us  110.500us
+CB Phi200                  43.200us   80.300us  137.850us
+CB Phi300                  35.250us   76.500us  110.300us
+CBIRG Phi50 CC4            10.250us   11.300us   39.950us
+CBIRG Phi50 CC8            11.100us   21.950us   52.100us
+CBIRG Phi50 CC13           15.100us   55.100us   83.550us
+CBIRGSC Phi50 CC4          15.650us   35.450us  100.050us
+CBIRGSC Phi50 CC8          21.700us   35.450us  100.150us
+CBIRGSC Phi50 CC13         35.250us   65.400us  117.650us
+MT Phi50                   10.150us   10.850us   27.400us
+MT Phi100                  10.400us   11.750us   50.950us
+MT Phi200                  10.600us   12.700us   52.800us
+MT Phi300                  10.600us   13.150us   51.350us
+Rubin Phi50                63.250us  109.750us  136.300us
+Rubin Phi100               35.450us   68.200us  110.400us
+Rubin Phi200               42.900us   76.550us  122.150us
+Rubin Phi300               49.750us   80.850us  142.050us
+RubinIRG Phi50 CC4         10.250us   11.200us   41.950us
+RubinIRG Phi50 CC8         11.200us   22.550us   54.050us
+RubinIRG Phi50 CC13        15.250us   56.300us   83.950us
+RubinIRGSC Phi50 CC4       13.650us   35.450us  100.000us
+RubinIRGSC Phi50 CC8       23.150us   35.400us  109.700us
+RubinIRGSC Phi50 CC13      33.100us   64.200us  116.550us
+
+--- Observed convergence order (GRE_full ~ phi^-p) ---
+  CB       : p = -0.15   (4 points)
+  MT       : p = -0.05   (4 points)
+  Rubin    : p = 0.25   (4 points)

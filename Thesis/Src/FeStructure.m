@@ -76,6 +76,18 @@ classdef FeStructure < handle
         % --- Analysis results ---
         frequencies
         mode_shapes
+
+        % --- Local contact frames (set_contact_frames) ---
+        % Trot maps the local nodal DOFs to the global ones on the FULL
+        % (unconstrained) numbering, u_global = Trot * u_local; empty when no
+        % frame has been set, in which case every DOF is global. K, M and C are
+        % stored in the local DOFs once it is set.
+        Trot        = []
+        frame_nodes = []            % node IDs that carry a local frame
+        frame_R     = []            % [nD x nD x n] rotation of each, columns = local axes
+        frame_index = []            % [n_nodes x 1] index into frame_R, 0 = no frame
+        k_diag_ref  = []            % max(diag(Kc)) BEFORE the rotation, for the penalty scale
+        Trot_c      = []            % Trot restricted to the free DOFs (cached)
     end
 
     methods
@@ -427,6 +439,144 @@ classdef FeStructure < handle
                  'by element.'], nnz(d < 0), numel(d));
         end
 
+        function set_contact_frames(obj, ifaces)
+            % SET_CONTACT_FRAMES Express the DOFs of every contact node in a
+            % local frame whose first axis is the contact normal.
+            %
+            %   S.set_contact_frames(cfg.interfaces)
+            %
+            % WHY. A unilateral contact without friction loads a node only along
+            % the wall normal, so one DOF per node is all the interface of a CMS
+            % basis needs - but only if that DOF exists. With a wall normal to a
+            % coordinate axis it does; with an oblique wall the normal
+            % displacement mixes all the Cartesian DOFs of the node, and the
+            % interface would have to keep all of them (dofs = 'all'), tripling
+            % n_bnd, the Guyan pencil and R_res for nothing. Rotating the node
+            % DOFs into (normal, tangent, tangent) makes the normal a DOF again.
+            %
+            % WHAT CHANGES. K, M (and C if already set) become T'*(.)*T, with T
+            % block diagonal: one rotation per contact node, identity elsewhere.
+            % Everything that reads S.K / S.M afterwards - ROM bases, Guyan
+            % pencil, eigenvalues, Rayleigh damping, the FOM - works in local
+            % DOFs without knowing it. What has to be converted is only what
+            % crosses the boundary of the model: the shock forcing on the way in
+            % (shock_forcing), the displacements on the way out
+            % (extract_contact_response, the saved u_full), and the contact
+            % operator (contact_operator reads the frame of each node).
+            %
+            % FRAME CHOICE. The normal goes in the slot of its largest Cartesian
+            % component and the other two slots are completed by Gram-Schmidt on
+            % the remaining axes. For a wall normal to an axis the rotation is
+            % then a pure sign change of one DOF, which is exact in floating
+            % point: switching the frames on changes no result. That is also the
+            % non-regression test.
+            %
+            % Call once, after build() and before building contacts, forcing or
+            % ROMs.
+            if ~isempty(obj.Trot)
+                error('FeStructure:FramesSet', 'Local contact frames are already set.');
+            end
+            if isempty(obj.K) || isempty(obj.M)
+                error('FeStructure:NoMatrices', 'Run build() before set_contact_frames.');
+            end
+            spec   = normalize_interface_spec(ifaces);
+            nD     = obj.MeshObj.nDOFPerNode;
+            n_full = size(obj.K, 1);
+            n_node = size(obj.nodes, 1);
+
+            idx = zeros(n_node, 1);  Rs = zeros(nD, nD, 0);  ids_all = zeros(0, 1);
+            n_clamped = 0;
+            for i = 1:numel(spec)
+                nrm = zeros(nD, 1);
+                nn  = spec(i).normal(:);
+                nrm(1:min(nD, numel(nn))) = nn(1:min(nD, numel(nn)));
+                nrm = nrm / norm(nrm);
+                R   = frame_from_normal(nrm);
+                ids = obj.get_nodes(spec(i).set);
+                for j = 1:numel(ids)
+                    id = ids(j);
+                    if idx(id) > 0
+                        if norm(Rs(:,:,idx(id)) - R, 'fro') > 1e-12
+                            error('FeStructure:SharedFrame', ...
+                                ['Node %d belongs to two contact sets with different ' ...
+                                 'normals; one node can carry only one frame.'], id);
+                        end
+                        continue
+                    end
+                    dofs = (id - 1)*nD + (1:nD);
+                    free = obj.AssemblyObj.free2constrained_index(dofs) > 0;
+                    if ~any(free)
+                        n_clamped = n_clamped + 1;  continue   % dropped by contact_operator
+                    end
+                    if ~all(free) && norm(R - diag(diag(R)), 'fro') > 0
+                        error('FeStructure:PartialClamp', ...
+                            ['Node %d is clamped in some directions only and its ' ...
+                             'contact normal is oblique: a rotation would mix fixed ' ...
+                             'and free DOFs.'], id);
+                    end
+                    Rs(:, :, end+1) = R;  %#ok<AGROW>
+                    idx(id) = size(Rs, 3);
+                    ids_all(end+1, 1) = id; %#ok<AGROW>
+                end
+            end
+
+            % Block-diagonal T from triplets: identity on every DOF that is not
+            % rotated, one nD x nD block per framed node.
+            framed_dof = false(n_full, 1);
+            I = []; J = []; V = [];
+            for j = 1:numel(ids_all)
+                dofs = (ids_all(j) - 1)*nD + (1:nD);
+                framed_dof(dofs) = true;
+                [r, c] = ndgrid(dofs, dofs);
+                R = Rs(:, :, idx(ids_all(j)));
+                I = [I; r(:)]; J = [J; c(:)]; V = [V; R(:)]; %#ok<AGROW>
+            end
+            plain = find(~framed_dof);
+            T = sparse([I; plain], [J; plain], [V; ones(numel(plain), 1)], n_full, n_full);
+            T = T .* (abs(T) > 0);                     % drop explicit zeros of the blocks
+
+            obj.k_diag_ref = full(max(diag(obj.AssemblyObj.constrain_matrix(obj.K))));
+            % No symmetrisation afterwards: the assembled matrices are symmetric
+            % only to roundoff, and (A+A')/2 would change their last bits even
+            % where T is a pure sign change - which is exactly the case that
+            % must reproduce the run without frames bit for bit.
+            obj.K = T' * obj.K * T;
+            obj.M = T' * obj.M * T;
+            obj.AssemblyObj.DATA.K = obj.K;
+            obj.AssemblyObj.DATA.M = obj.M;
+            if ~isempty(obj.C)
+                obj.C = T' * obj.C * T;
+                obj.AssemblyObj.DATA.C = obj.C;
+            end
+            obj.Trot        = T;
+            obj.Trot_c      = obj.AssemblyObj.constrain_matrix(T);
+            obj.frame_nodes = ids_all;
+            obj.frame_R     = Rs;
+            obj.frame_index = idx;
+
+            n_obl = 0;
+            for j = 1:size(Rs, 3), n_obl = n_obl + (norm(Rs(:,:,j) - diag(diag(Rs(:,:,j))), 'fro') > 0); end
+            fprintf(['--- Local contact frames: %d nodes (%d oblique, %d aligned with ' ...
+                     'an axis), %d clamped nodes skipped ---\n'], numel(ids_all), n_obl, ...
+                     numel(ids_all) - n_obl, n_clamped);
+        end
+
+        function u = to_global(obj, u_full)
+            % TO_GLOBAL Local nodal DOFs -> global Cartesian, full numbering.
+            if isempty(obj.Trot), u = u_full; else, u = obj.Trot * u_full; end
+        end
+
+        function u = to_global_constrained(obj, u_c)
+            % TO_GLOBAL_CONSTRAINED Same, on the free (constrained) numbering.
+            if isempty(obj.Trot), u = u_c; else, u = obj.Trot_c * u_c; end
+        end
+
+        function v = to_local(obj, v_full)
+            % TO_LOCAL Global Cartesian -> local nodal DOFs, full numbering
+            % (T is orthogonal, so its inverse is its transpose).
+            if isempty(obj.Trot), v = v_full; else, v = obj.Trot' * v_full; end
+        end
+
         function compute_eigenmodes(obj, n_modes)
             % COMPUTE_EIGENMODES Normal modes of the constrained model.
             if isempty(obj.K) || isempty(obj.M)
@@ -438,7 +588,10 @@ classdef FeStructure < handle
             [V0, om] = eigs(Kc, Mc, n_modes, 'SM');
             [obj.frequencies, ind] = sort(sqrt(diag(om)) / (2*pi));
             V0 = V0(:, ind);
-            obj.mode_shapes = obj.AssemblyObj.unconstrain_vector(V0);
+            % Always stored in GLOBAL components, so plots and anything that
+            % reads node positions see physical directions; the eigenvalues are
+            % unaffected by the local frames (orthogonal change of DOFs).
+            obj.mode_shapes = obj.to_global(obj.AssemblyObj.unconstrain_vector(V0));
 
             % Normalized on the largest NODAL displacement, as the reference
             % 3D script does, rather than on the largest single component: the
@@ -575,33 +728,148 @@ classdef FeStructure < handle
         %  PLOTS
         % =================================================================
         function plot_node_sets(obj)
-            % PLOT_NODE_SETS Mesh with the nodes of each set marked.
-            % Immediate visual check that the sets are where they should be.
-            if isempty(obj.set_labels)
-                error('FeStructure:NoSets', 'No node set to plot.');
-            end
-            figure('Name','Node sets','Color','w');
-            PlotMesh(obj.nodes, obj.plot_connectivity(), 0);
-            hold on;
-            mk = {'o','s','d','^','v','>','<','p'};
-            h = gobjects(1, numel(obj.set_labels));
-            for i = 1:numel(obj.set_labels)
-                n = obj.node_sets.(obj.set_labels{i});
-                if isempty(n), continue; end
-                c = obj.nodes(n, :);
-                if obj.n_dim == 3
-                    h(i) = plot3(c(:,1), c(:,2), c(:,3), mk{mod(i-1,numel(mk))+1});
-                else
-                    h(i) = plot(c(:,1), c(:,2), mk{mod(i-1,numel(mk))+1});
-                end
-                set(h(i), 'MarkerSize', 7, 'LineWidth', 1.3, 'LineStyle', 'none', ...
-                    'DisplayName', sprintf('%s (%d)', obj.set_labels{i}, numel(n)));
-            end
-            legend(h(isgraphics(h)), 'Location', 'bestoutside');
-            title('Node sets'); axis equal; grid on;
-            if obj.n_dim == 3, view(3); end
+    % PLOT_NODE_SETS Mesh con i nodi appartenenti a ciascun set.
+
+    if isempty(obj.set_labels)
+        error('FeStructure:NoSets', ...
+              'No node set to plot.');
+    end
+
+    figure('Name', 'Node sets', 'Color', 'w');
+
+    PlotMesh(obj.nodes, obj.plot_connectivity(), 0);
+    hold on;
+
+    mk = {'o','s','d','^','v','>','<','p'};
+
+    % Handle e label validi solamente per i set effettivamente disegnati
+    h = gobjects(0,1);
+    leg_labels = cell(0,1);
+
+    for i = 1:numel(obj.set_labels)
+
+        raw_label = obj.set_labels{i};
+        n = obj.node_sets.(raw_label);
+
+        % Ignora eventuali set vuoti
+        if isempty(n)
+            continue;
         end
 
+        c = obj.nodes(n, :);
+        marker = mk{mod(i-1, numel(mk)) + 1};
+
+        % Crea il grafico e conserva l'handle restituito
+        if obj.n_dim == 3
+            hi = plot3(c(:,1), c(:,2), c(:,3), marker, ...
+                'MarkerSize', 7, ...
+                'LineWidth', 1.3, ...
+                'LineStyle', 'none');
+        else
+            hi = plot(c(:,1), c(:,2), marker, ...
+                'MarkerSize', 7, ...
+                'LineWidth', 1.3, ...
+                'LineStyle', 'none');
+        end
+
+        % Aggiunge solo handle validi
+        h(end+1,1) = hi;
+
+        % Formattazione dell'etichetta della legenda
+        %
+        % Esempi:
+        % stop_A_top -> stop A top
+        % stop_B_bot -> stop B bot
+        % stop_Atop  -> stop A top
+        %
+        token = regexp(raw_label, ...
+            '^stop_([A-Da-d])_?(top|bot)$', ...
+            'tokens', 'once');
+
+        if ~isempty(token)
+            legend_label = sprintf('stop %s %s', ...
+                upper(token{1}), lower(token{2}));
+        elseif strcmpi(raw_label, 'anchor')
+            legend_label = 'anchor';
+        else
+            % Comportamento generico per eventuali altri nomi
+            legend_label = strrep(raw_label, '_', ' ');
+        end
+
+        leg_labels{end+1,1} = sprintf('%s (%d)', ...
+            legend_label, numel(n));
+    end
+
+    % Crea la legenda solo se esistono elementi validi
+    if ~isempty(h)
+        lgd = legend(h, leg_labels, ...
+            'Location', 'bestoutside', ...
+            'Interpreter', 'none');
+
+        % Evita che nuovi plot vengano aggiunti automaticamente
+        lgd.AutoUpdate = 'off';
+    end
+
+    title('Contact Interfaces and Fixed nodes');
+    axis equal;
+    grid on;
+
+    if obj.n_dim == 3
+        view(3);
+    end
+end
+function plot_first_four_modes(obj, scale_factor)
+    % PLOT_FIRST_FOUR_MODES Plot dei primi quattro modi in una figura.
+
+    n_modes = 4;
+
+    if isempty(obj.mode_shapes) || size(obj.mode_shapes, 2) < n_modes
+        obj.compute_eigenmodes(n_modes);
+    end
+
+    if nargin < 2 || isempty(scale_factor)
+        scale_factor = 0.2 * ...
+            max(max(obj.nodes, [], 1) - min(obj.nodes, [], 1));
+    end
+
+    conn = obj.plot_connectivity();
+    nD = obj.MeshObj.nDOFPerNode;
+    cmap = jet(256);
+
+    figure('Name', 'Primi quattro modi', 'Color', 'w');
+
+    for mode_idx = 1:n_modes
+        ax = subplot(2, 2, mode_idx);
+
+        v = reshape(obj.mode_shapes(:, mode_idx), nD, []).';
+
+        PlotFieldonDeformedMesh(obj.nodes, conn, v, ...
+            'factor', scale_factor);
+
+        % Impostazioni applicate dopo PlotFieldonDeformedMesh
+        set(ax, 'Colormap', cmap);
+        clim(ax, [0 1]);
+
+        cb = colorbar(ax);
+        cb.Limits = [0 1];
+
+        title(ax, sprintf('Modo %d - %.4g Hz', ...
+            mode_idx, obj.frequencies(mode_idx)), ...
+            'FontWeight', 'bold');
+
+        axis(ax, 'equal');
+        grid(ax, 'on');
+
+        set(findobj(ax, '-property', 'Marker'), ...
+            'Marker', 'none');
+
+        if obj.n_dim == 3
+            view(ax, 3);
+        end
+    end
+
+    sgtitle('Primi quattro modi della struttura');
+end
         function plot_mode(obj, mode_idx, scale_factor)
             % PLOT_MODE Mode shape mode_idx over the undeformed mesh.
             if isempty(obj.mode_shapes)
@@ -709,4 +977,26 @@ for i = 1:3:numel(raw)
     nums = [nums, raw(i):step:raw(i+1)]; %#ok<AGROW>
 end
 nums = nums(:);
+end
+
+% =====================================================================
+function R = frame_from_normal(n)
+% Orthonormal frame whose column k is the unit normal n, k being the slot of its
+% largest component; the other columns are the remaining coordinate axes made
+% orthogonal by Gram-Schmidt, in their natural order. For n = +-e_k this returns
+% the identity with a sign on column k, so an aligned wall only flips the sign
+% of one DOF.
+    nD = numel(n);
+    [~, k] = max(abs(n));
+    R = eye(nD);
+    R(:, k) = n;
+    for j = [1:k-1, k+1:nD]
+        v = R(:, j);
+        for i = [k, 1:j-1]
+            if i == j, continue; end
+            if i ~= k && i > j, continue; end
+            v = v - (R(:, i)' * v) * R(:, i);
+        end
+        R(:, j) = v / norm(v);
+    end
 end

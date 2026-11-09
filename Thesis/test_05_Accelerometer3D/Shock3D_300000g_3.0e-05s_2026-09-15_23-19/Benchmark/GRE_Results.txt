@@ -1,0 +1,45 @@
+======================================================
+ GLOBAL RELATIVE ERROR (GRE) & TIME REPORT - 3D
+======================================================
+ Interfaces: stop_A_top, stop_A_bot, stop_B_top, stop_B_bot, stop_C_top, stop_C_bot, stop_D_top, stop_D_bot
+ Reference metric: GRE_full (window 25%)
+ Integration floor: 6.10e-06 %
+ Eref = 1.3453e+04
+
+>>> CASE: Q = 5 | k_mult = 0.003125 | Newmark <<<
+  MTNM      Phi 200 | CC   - | GRE_full   34.4961% | GRE_win    1.4007% | Off    59.3s | On    26.0s
+               within 1%:  5.51 us  (inside 18%)
+  RubinIRGNM Phi 200 | CC  16 | GRE_full   29.6688% | GRE_win    1.6605% | Off    11.7s | On    29.5s
+               within 1%:  5.84 us  (inside 19%)
+  RubinIRGNM Phi 200 | CC  32 | GRE_full   60.3856% | GRE_win    1.0602% | Off    11.7s | On    32.7s
+               within 1%:  6.23 us  (inside 22%)
+  RubinIRGNM Phi 200 | CC  64 | GRE_full   33.1400% | GRE_win    0.9396% | Off    11.7s | On    38.8s
+               within 1%:  6.27 us  (inside 21%)
+  RubinIRGNM Phi 200 | CC 128 | GRE_full   15.2975% | GRE_win    0.0204% | Off    11.8s | On    52.3s
+               within 1%:  13.29 us  (inside 43%)
+  RubinIRGSCNM Phi 200 | CC  16 | GRE_full   39.3180% | GRE_win    0.1379% | Off    11.4s | On    31.5s
+               within 1%:  11.58 us  (inside 39%)
+  RubinIRGSCNM Phi 200 | CC  32 | GRE_full   28.0070% | GRE_win    0.0528% | Off    11.4s | On    31.8s
+               within 1%:  9.15 us  (inside 30%)
+  RubinIRGSCNM Phi 200 | CC  64 | GRE_full   35.7619% | GRE_win    0.0341% | Off    11.4s | On    39.1s
+               within 1%:  10.50 us  (inside 36%)
+  RubinIRGSCNM Phi 200 | CC 128 | GRE_full   31.2062% | GRE_win    0.0172% | Off    11.4s | On    52.4s
+               within 1%:  12.24 us  (inside 40%)
+  RubinNM   Phi 200 | CC   - | GRE_full   30.0011% | GRE_win    0.0139% | Off    11.8s | On    86.6s
+               within 1%:  12.40 us  (inside 41%)
+
+
+--- Tracking time ---
+ROM                         < 0.1%        < 1%       < 10%
+MTNM Phi200                3.87us     5.51us     9.56us
+RubinIRGNM Phi200 CC16     4.08us     5.84us    13.29us
+RubinIRGNM Phi200 CC32     4.40us     6.23us    12.97us
+RubinIRGNM Phi200 CC64     4.84us     6.27us    14.88us
+RubinIRGNM Phi200 CC128     7.88us    13.29us    21.99us
+RubinIRGSCNM Phi200 CC16     5.69us    11.58us    14.01us
+RubinIRGSCNM Phi200 CC32     7.65us     9.15us    15.56us
+RubinIRGSCNM Phi200 CC64     7.76us    10.50us    13.86us
+RubinIRGSCNM Phi200 CC128     8.11us    12.24us    14.55us
+RubinNM Phi200             8.45us    12.40us    15.66us
+
+--- Observed convergence order (GRE_full ~ phi^-p) ---

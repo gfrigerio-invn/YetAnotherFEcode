@@ -22,6 +22,11 @@ function y_contact = extract_contact_response(Struct, Interfaces, labels, q_cons
 %   no single Cartesian component carries the whole story.
 
 y_full    = Struct.AssemblyObj.unconstrain_vector(q_constrained);
+% Back to global components if the contact nodes carry local frames: the
+% interface normals and the coordinates below are global.
+if isprop(Struct, 'Trot') && ~isempty(Struct.Trot)
+    y_full = Struct.to_global(y_full);
+end
 n_dim     = Struct.MeshObj.nDOFPerNode;
 n_time    = size(q_constrained, 2);
 axis_name = {'X', 'Y', 'Z'};
